@@ -3,6 +3,7 @@ import { getCatalog } from "./catalog";
 
 export default async function Home() {
   const catalog = await getCatalog();
+  const cloudflareLive = catalog.source !== "local-fallback";
   const artwork = {
     hero: catalog.artwork.hero ?? fallbackArtwork.hero,
     rabbit: catalog.artwork.rabbit ?? fallbackArtwork.rabbit,
@@ -51,7 +52,11 @@ export default async function Home() {
             <a className="button primary" href="#story">Enter the story</a>
             <a className="button secondary" href="#shop">Explore ready printables</a>
           </div>
-          <p className="sync-note">Collection 01 · Drive master → Sheet gate → Cloudflare R2 → Vercel</p>
+          <p className="sync-note">
+            {cloudflareLive
+              ? "Live pipeline · Drive master → Sheet gate → Cloudflare R2 → Vercel"
+              : "Cloudflare pipeline scaffold ready · local catalog fallback is still active"}
+          </p>
         </div>
 
         <figure className="hero-art">
