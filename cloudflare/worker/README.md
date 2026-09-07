@@ -2,9 +2,9 @@
 
 Target pipeline:
 
-`Google Drive → Google Sheet → Cloudflare Worker → R2 → Vercel`
+`Google Drive → Google Sheet → Cloudflare Worker + Images → R2 → Vercel`
 
-Google Drive remains the master source of truth for artwork/product files. Google Sheet owns release status. The Worker reads both release tabs, blocks inconsistent products, mirrors approved website artwork into R2, and writes a generated `catalog/catalog.json` object for the Next.js site.
+Google Drive remains the master source for artwork/product files. Google Sheet is the catalog and release source of truth. The Worker reads release status plus website metadata from the Sheet, transcodes approved website artwork to WebP with the Cloudflare Images binding, stores the resulting bytes in R2, and generates `catalog/catalog.json` for the Next.js site.
 
 ## Release gate
 
@@ -14,9 +14,46 @@ A product is published only when all three checks pass:
 2. `Task Queue.Status = COMPLETE`
 3. `Task Queue.QA / Gate` contains `PASS`
 
-This intentionally excludes conflicting rows such as a Task Queue item that says COMPLETE while File Index still points to a prototype/upload-pending artifact.
+Rows also need `File Index.Catalog Type = PRODUCT` before they can enter the website catalog.
 
-Website artwork is mirrored only when `File Index.Status = WEBSITE READY` and Task ID matches the approved web artwork registry (`WEB-ART-01` … `WEB-ART-04`).
+Website artwork is mirrored only when:
+
+1. `File Index.Catalog Type = ARTWORK`
+2. `File Index.Status = WEBSITE READY`
+3. `Artwork Key` is present
+4. `CDN Format = webp`
+
+The Worker validates product `Image Key` references against the artwork generated during the same sync. A broken image mapping blocks catalog publication instead of creating a partially broken catalog.
+
+## Sheet-owned website fields
+
+`File Index` now owns these fields:
+
+- `Catalog Type` — `PRODUCT` or `ARTWORK`
+- `Web Slug`
+- `Web Meta`
+- `Web Detail`
+- `Image Key`
+- `Artwork Key`
+- `CDN Format`
+
+Product rows use `Web Slug / Web Meta / Web Detail / Image Key`.
+Artwork rows use `Artwork Key / CDN Format`.
+
+There is no product metadata registry or artwork-ID registry inside the Worker anymore.
+
+## WebP pipeline
+
+The Drive master can remain PNG. During `/sync`, the Worker passes the original image bytes to the Cloudflare Images binding and outputs real `image/webp` bytes before writing to R2.
+
+Resulting R2 keys are:
+
+- `media/hero.webp`
+- `media/rabbit.webp`
+- `media/fox.webp`
+- `media/owl.webp`
+
+The original Drive files remain unchanged and continue to be the master assets.
 
 ## Worker endpoints
 
@@ -28,32 +65,26 @@ Website artwork is mirrored only when `File Index.Status = WEBSITE READY` and Ta
 ## Cloudflare setup
 
 1. Create an R2 bucket named `digital-arts-artwork`.
-2. Copy `wrangler.toml.example` to `wrangler.toml`.
-3. Create a Google Cloud service account with read-only Sheets + Drive access.
-4. Share the production Google Sheet and the approved website-artwork Drive files/folder with the service-account email as Viewer.
-5. Configure Worker secrets:
+2. Enable the Cloudflare Images binding for the Worker as `IMAGES`.
+3. Copy `wrangler.toml.example` to `wrangler.toml`.
+4. Create a Google Cloud service account with read-only Sheets + Drive access.
+5. Share the production Google Sheet and approved website artwork with the service-account email as Viewer.
+6. Configure Worker secrets:
    - `SYNC_TOKEN`
    - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
    - `GOOGLE_PRIVATE_KEY`
-6. Deploy the Worker.
-7. Run the first sync with `POST /sync` and `Authorization: Bearer <SYNC_TOKEN>`.
-8. Verify `GET /catalog.json` returns approved products and R2 artwork URLs.
-9. Add Vercel environment variable:
-   - `CLOUDFLARE_CATALOG_URL=https://<worker-host>/catalog.json`
-10. Redeploy Vercel. The site will automatically stop using `local-fallback` when the Worker catalog becomes reachable.
-
-## WebP note
-
-The current Worker preserves the source image MIME type when copying from Drive into R2. Existing website masters are PNG, so the first R2 sync will remain PNG. To enforce **WebP stored in R2**, choose one of these production paths:
-
-- Preferred: generate approved WebP preview assets upstream and store those preview files in Drive; point `WEB-ART-*` rows to the WebP previews.
-- Alternative: add Cloudflare image transformation/Images before the R2 write once that service is enabled for the account.
-
-Do not label R2 objects as WebP unless the bytes are actually WebP.
+7. Deploy the Worker.
+8. Run `POST /sync` with `Authorization: Bearer <SYNC_TOKEN>`.
+9. Verify `GET /catalog.json` returns the approved products and `.webp` R2 media URLs.
+10. Add the Vercel environment variable:
+    - `CLOUDFLARE_CATALOG_URL=https://<worker-host>/catalog.json`
+11. Redeploy Vercel. The site will automatically stop using `local-fallback` when the Worker catalog becomes reachable.
 
 ## Failure behavior
 
-The Next.js site uses the current local catalog/artwork as a safe fallback when `CLOUDFLARE_CATALOG_URL` is missing, unreachable, or invalid. This lets the Cloudflare migration be deployed incrementally without breaking Production.
+The sync fails closed when required Sheet metadata, Drive IDs, Images/R2 bindings, or product-to-artwork mappings are missing. The previously generated R2 catalog remains untouched when a sync fails before the catalog write.
+
+The Next.js site continues to use the current local catalog/artwork as a temporary migration fallback when `CLOUDFLARE_CATALOG_URL` is missing, unreachable, or invalid. Once the Cloudflare pipeline is live and verified, that fallback can be removed in a separate cleanup.
 
 ## Current production Sheet
 
