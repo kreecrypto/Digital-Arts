@@ -1,19 +1,34 @@
-import { artwork } from "./artwork";
-import { catalogLastSynced, products } from "./catalog";
+import { artwork as fallbackArtwork } from "./artwork";
+import { getCatalog } from "./catalog";
 
-const storyPieces = [
-  { title: "Morning Rabbit", note: "A quiet creek, wildflowers and a little courage.", image: artwork.rabbit, className: "morning" },
-  { title: "Forest Fox", note: "Golden light, mossy stones and a curious companion.", image: artwork.fox, className: "forest" },
-  { title: "Moonlit Owl", note: "A calm night story lit by moonlight and fireflies.", image: artwork.owl, className: "night" },
-];
+export default async function Home() {
+  const catalog = await getCatalog();
+  const artwork = {
+    hero: catalog.artwork.hero ?? fallbackArtwork.hero,
+    rabbit: catalog.artwork.rabbit ?? fallbackArtwork.rabbit,
+    fox: catalog.artwork.fox ?? fallbackArtwork.fox,
+    owl: catalog.artwork.owl ?? fallbackArtwork.owl,
+  };
 
-const productImages = {
-  rabbit: artwork.rabbit,
-  fox: artwork.fox,
-  owl: artwork.owl,
-};
+  const storyPieces = [
+    { title: "Morning Rabbit", note: "A quiet creek, wildflowers and a little courage.", image: artwork.rabbit, className: "morning" },
+    { title: "Forest Fox", note: "Golden light, mossy stones and a curious companion.", image: artwork.fox, className: "forest" },
+    { title: "Moonlit Owl", note: "A calm night story lit by moonlight and fireflies.", image: artwork.owl, className: "night" },
+  ];
 
-export default function Home() {
+  const productImages = {
+    rabbit: artwork.rabbit,
+    fox: artwork.fox,
+    owl: artwork.owl,
+  };
+
+  const syncedLabel = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(new Date(catalog.syncedAt));
+
   return (
     <main>
       <header className="nav shell">
@@ -36,7 +51,7 @@ export default function Home() {
             <a className="button primary" href="#story">Enter the story</a>
             <a className="button secondary" href="#shop">Explore ready printables</a>
           </div>
-          <p className="sync-note">Collection 01 · Artwork synced from the approved Drive library</p>
+          <p className="sync-note">Collection 01 · Drive master → Sheet gate → Cloudflare R2 → Vercel</p>
         </div>
 
         <figure className="hero-art">
@@ -70,14 +85,14 @@ export default function Home() {
           <div className="section-heading">
             <p className="eyebrow">From the production library</p>
             <h2>Ready printables from the same woodland world.</h2>
-            <p className="lede">Only products marked COMPLETE with final QA PASS in the production File Index are surfaced here.</p>
+            <p className="lede">A product is surfaced only when File Index = COMPLETE, Task Queue = COMPLETE, and QA / Gate contains PASS.</p>
           </div>
 
           <div className="product-grid">
-            {products.map((product) => (
+            {catalog.products.map((product) => (
               <article className="product-card" key={product.id}>
                 <div className="product-image">
-                  <img src={productImages[product.image]} alt={`${product.title} woodland artwork preview`} />
+                  <img src={productImages[product.imageKey]} alt={`${product.title} woodland artwork preview`} />
                 </div>
                 <div className="product-body">
                   <div className="product-status"><span>{product.id}</span><span>{product.status}</span></div>
@@ -88,7 +103,7 @@ export default function Home() {
               </article>
             ))}
           </div>
-          <p className="catalog-note">Catalog source: Etsy Digital Product — File Index · Last synced {catalogLastSynced}</p>
+          <p className="catalog-note">Catalog source: {catalog.source} · Last synced {syncedLabel}</p>
         </div>
       </section>
 
@@ -97,7 +112,7 @@ export default function Home() {
         <div>
           <p className="eyebrow">Artwork-first by design</p>
           <h2>One visual world, many printable stories.</h2>
-          <p>Original full-resolution artwork stays in Google Drive as the source of truth. The website uses lightweight mirrored previews for fast delivery while the Sheet keeps product status and traceability.</p>
+          <p>Google Drive remains the master source. Google Sheet owns the release gate. Cloudflare Worker validates the gate and mirrors approved web artwork into R2 before Vercel consumes the generated catalog.</p>
         </div>
       </section>
 
@@ -105,14 +120,14 @@ export default function Home() {
         <div>
           <p className="eyebrow">More stories are growing</p>
           <h2>Start with what is production-ready.</h2>
-          <p>New artwork and products can enter the website only after they are stored in Drive and pass the catalog gate in the File Index.</p>
+          <p>New artwork and products enter the website only after the master file is in Drive and both release tables agree that the product has passed final QA.</p>
         </div>
         <a className="button primary" href="#shop">Explore ready printables</a>
       </section>
 
       <footer className="footer shell">
         <strong>Digital Arts</strong>
-        <p>Original artwork lives in Drive. Approved catalog status is mirrored from the production File Index into this website.</p>
+        <p>Drive master · Sheet release registry · Cloudflare sync/CDN · GitHub source · Vercel delivery.</p>
       </footer>
     </main>
   );
