@@ -1,31 +1,3 @@
-const PRODUCT_DEFAULTS = {
-  "ETSY-03": {
-    slug: "woodland-scissor-skills",
-    meta: "13 pages · A4 + US Letter",
-    detail: "12 progressive cutting activities for ages 3–5.",
-    imageKey: "rabbit",
-  },
-  "ETSY-04": {
-    slug: "woodland-alphabet-a-z",
-    meta: "27 pages per format",
-    detail: "A–Z learning set using the approved woodland asset library.",
-    imageKey: "fox",
-  },
-  "ETSY-05": {
-    slug: "woodland-matching-game",
-    meta: "12 pairs · 24 cards",
-    detail: "Three-page matching game in A4 and US Letter.",
-    imageKey: "owl",
-  },
-};
-
-const ARTWORK_KEYS = {
-  "WEB-ART-01": "hero",
-  "WEB-ART-02": "rabbit",
-  "WEB-ART-03": "fox",
-  "WEB-ART-04": "owl",
-};
-
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "public, max-age=60, s-maxage=300",
@@ -92,6 +64,8 @@ async function syncProductionCatalog(request, env) {
     "GOOGLE_PRIVATE_KEY",
     "SPREADSHEET_ID",
     "SYNC_TOKEN",
+    "ARTWORK_BUCKET",
+    "IMAGES",
   ]);
 
   const token = await getGoogleAccessToken(env);
@@ -106,41 +80,62 @@ async function syncProductionCatalog(request, env) {
   const media = [];
 
   for (const row of fileIndex) {
-    const taskId = row["Task ID"];
-    const artworkKey = ARTWORK_KEYS[taskId];
-    if (!artworkKey || normalize(row.Status) !== "WEBSITE READY") continue;
+    if (normalize(row["Catalog Type"]) !== "ARTWORK") continue;
+    if (normalize(row.Status) !== "WEBSITE READY") continue;
 
+    const taskId = requiredSheetValue(row, "Task ID", "artwork row");
+    const artworkKey = safeMediaKey(requiredSheetValue(row, "Artwork Key", taskId));
+    const outputFormat = normalizeFormat(requiredSheetValue(row, "CDN Format", taskId));
     const driveId = extractDriveId(row["Drive Link"] || "");
-    if (!driveId) continue;
+    if (!driveId) throw new Error(`Missing Drive file ID for ${taskId}`);
 
     const driveResponse = await fetch(
       `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`,
       { headers: { authorization: `Bearer ${token}` } },
     );
-    if (!driveResponse.ok) {
+    if (!driveResponse.ok || !driveResponse.body) {
       throw new Error(`Drive download failed for ${taskId}: ${driveResponse.status}`);
     }
 
-    const contentType = driveResponse.headers.get("content-type") || "image/png";
-    const extension = extensionForContentType(contentType);
-    const mediaKey = `${artworkKey}.${extension}`;
-    const body = await driveResponse.arrayBuffer();
+    const sourceContentType = driveResponse.headers.get("content-type") || "application/octet-stream";
+    const transformedResponse = await transcodeArtwork(driveResponse.body, env, outputFormat);
+    if (!transformedResponse.ok || !transformedResponse.body) {
+      throw new Error(`Image transform failed for ${taskId}: ${transformedResponse.status}`);
+    }
+
+    const contentType = mimeForOutputFormat(outputFormat);
+    const mediaKey = `${artworkKey}.${extensionForOutputFormat(outputFormat)}`;
+    const body = await transformedResponse.arrayBuffer();
 
     await env.ARTWORK_BUCKET.put(`media/${mediaKey}`, body, {
-      httpMetadata: { contentType },
-      customMetadata: { sourceTaskId: taskId, sourceDriveId: driveId },
+      httpMetadata: {
+        contentType,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+      customMetadata: {
+        sourceTaskId: taskId,
+        sourceDriveId: driveId,
+        sourceContentType,
+        outputFormat,
+      },
     });
 
     artwork[artworkKey] = `${origin}/media/${encodeURIComponent(mediaKey)}`;
-    media.push({ taskId, key: artworkKey, r2Key: `media/${mediaKey}`, contentType });
+    media.push({
+      taskId,
+      key: artworkKey,
+      r2Key: `media/${mediaKey}`,
+      sourceContentType,
+      contentType,
+      outputFormat,
+    });
   }
 
   const products = [];
   for (const row of fileIndex) {
-    const taskId = row["Task ID"];
-    const defaults = PRODUCT_DEFAULTS[taskId];
-    if (!defaults) continue;
+    if (normalize(row["Catalog Type"]) !== "PRODUCT") continue;
 
+    const taskId = requiredSheetValue(row, "Task ID", "product row");
     const task = tasksById.get(taskId);
     const fileReady = normalize(row.Status) === "COMPLETE";
     const taskReady = normalize(task?.Status) === "COMPLETE";
@@ -148,24 +143,32 @@ async function syncProductionCatalog(request, env) {
 
     if (!(fileReady && taskReady && qaPass)) continue;
 
+    const imageKey = requiredSheetValue(row, "Image Key", taskId);
     products.push({
       id: taskId,
-      slug: defaults.slug,
+      slug: requiredSheetValue(row, "Web Slug", taskId),
       title: stripFinalSuffix(row.Artifact || task?.Task || taskId),
-      meta: defaults.meta,
-      detail: defaults.detail,
+      meta: requiredSheetValue(row, "Web Meta", taskId),
+      detail: requiredSheetValue(row, "Web Detail", taskId),
       status: "QA PASS",
-      imageKey: defaults.imageKey,
+      imageKey,
       sourceDriveUrl: row["Drive Link"] || null,
     });
   }
 
+  for (const product of products) {
+    if (!artwork[product.imageKey]) {
+      throw new Error(`Product ${product.id} references missing artwork key: ${product.imageKey}`);
+    }
+  }
+
   const payload = {
-    schemaVersion: 1,
-    source: "google-drive-sheet-cloudflare-r2",
+    schemaVersion: 2,
+    source: "google-drive-sheet-cloudflare-images-r2",
     syncedAt: new Date().toISOString(),
     spreadsheetId: env.SPREADSHEET_ID,
     releaseGate: "File Index COMPLETE + Task Queue COMPLETE + QA/Gate contains PASS",
+    imagePipeline: "Drive original -> Cloudflare Images -> WebP -> R2",
     artwork,
     products,
   };
@@ -186,7 +189,7 @@ async function syncProductionCatalog(request, env) {
 
 function assertEnv(env, keys) {
   const missing = keys.filter((key) => !env[key]);
-  if (missing.length) throw new Error(`Missing Worker secrets/vars: ${missing.join(", ")}`);
+  if (missing.length) throw new Error(`Missing Worker secrets/vars/bindings: ${missing.join(", ")}`);
 }
 
 async function readSheetTabs(spreadsheetId, token) {
@@ -223,6 +226,12 @@ function normalize(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function requiredSheetValue(row, column, context) {
+  const value = String(row?.[column] ?? "").trim();
+  if (!value) throw new Error(`Missing Sheet value '${column}' for ${context}`);
+  return value;
+}
+
 function stripFinalSuffix(value) {
   return String(value).replace(/\s+FINAL$/i, "").trim();
 }
@@ -236,10 +245,37 @@ function extractDriveId(url) {
   return null;
 }
 
-function extensionForContentType(contentType) {
-  if (contentType.includes("webp")) return "webp";
-  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
-  return "png";
+function safeMediaKey(value) {
+  const key = String(value || "").trim();
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(key)) {
+    throw new Error(`Invalid Artwork Key: ${key || "(empty)"}`);
+  }
+  return key;
+}
+
+function normalizeFormat(value) {
+  const format = String(value || "").trim().toLowerCase();
+  if (format !== "webp") {
+    throw new Error(`Unsupported CDN Format '${format || "(empty)"}'. Expected webp.`);
+  }
+  return format;
+}
+
+function mimeForOutputFormat(format) {
+  if (format === "webp") return "image/webp";
+  throw new Error(`Unsupported output format: ${format}`);
+}
+
+function extensionForOutputFormat(format) {
+  if (format === "webp") return "webp";
+  throw new Error(`Unsupported output format: ${format}`);
+}
+
+async function transcodeArtwork(stream, env, format) {
+  const result = await env.IMAGES
+    .input(stream)
+    .output({ format: mimeForOutputFormat(format) });
+  return result.response();
 }
 
 async function getGoogleAccessToken(env) {
