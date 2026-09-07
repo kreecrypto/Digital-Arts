@@ -7,6 +7,9 @@ workers_dev = true
 binding = "ARTWORK_BUCKET"
 bucket_name = "digital-arts-artwork"
 
+[images]
+binding = "IMAGES"
+
 [vars]
 SPREADSHEET_ID = "1C6qhwnDCVU_4Thp8wDA86qXHTNhkzgOEpLHl-3jg_j8"
 
