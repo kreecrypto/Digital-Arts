@@ -1,148 +1,118 @@
-const collections = [
-  { title: "Woodland Tales", note: "Soft forest stories for little dreamers.", tone: "sage" },
-  { title: "Moonlight Friends", note: "Gentle bedtime artwork with a quiet glow.", tone: "moon" },
-  { title: "Little Garden", note: "Tiny blooms, curious creatures, and sunny days.", tone: "peach" },
+import { artwork } from "./artwork";
+import { catalogLastSynced, products } from "./catalog";
+
+const storyPieces = [
+  { title: "Morning Rabbit", note: "A quiet creek, wildflowers and a little courage.", image: artwork.rabbit, className: "morning" },
+  { title: "Forest Fox", note: "Golden light, mossy stones and a curious companion.", image: artwork.fox, className: "forest" },
+  { title: "Moonlit Owl", note: "A calm night story lit by moonlight and fireflies.", image: artwork.owl, className: "night" },
 ];
 
-const prints = [
-  { title: "Forest Rabbit", meta: "Printable Art · A4 / US Letter", tone: "sage" },
-  { title: "Night Fox", meta: "Printable Art · A4 / US Letter", tone: "moon" },
-  { title: "Garden Bear", meta: "Printable Art · A4 / US Letter", tone: "butter" },
-  { title: "Tiny Deer", meta: "Printable Art · A4 / US Letter", tone: "peach" },
-];
+const productImages = {
+  rabbit: artwork.rabbit,
+  fox: artwork.fox,
+  owl: artwork.owl,
+};
 
 export default function Home() {
   return (
     <main>
       <header className="nav shell">
-        <a className="brand" href="#top" aria-label="Digital Arts home">
-          Digital Arts
-        </a>
+        <a className="brand" href="#top" aria-label="Digital Arts home">Digital Arts</a>
         <nav aria-label="Primary navigation">
-          <a href="#collections">Collections</a>
-          <a href="#prints">Art Prints</a>
-          <a href="#activities">Printables</a>
-          <a href="#freebie">Free Story Page</a>
+          <a href="#story">Collection 01</a>
+          <a href="#shop">Ready Printables</a>
+          <a href="#about">About the World</a>
         </nav>
-        <a className="nav-shop" href="#prints">Shop</a>
       </header>
 
       <section className="hero shell" id="top">
         <div className="hero-copy">
-          <p className="eyebrow">Illustrated digital goods for little worlds</p>
-          <h1>Little worlds,<br />made to keep.</h1>
+          <p className="eyebrow">The first story collection</p>
+          <h1>Small wonders<br />live in the woods.</h1>
           <p className="lede">
-            Storybook-inspired art, printable activities, and gentle collections created to bring imagination into everyday spaces.
+            Woodland Storybook brings one illustrated world across art, learning activities, and quiet-time printables — with the artwork always leading the experience.
           </p>
           <div className="actions">
-            <a className="button primary" href="#collections">Explore the stories</a>
-            <a className="text-link" href="#prints">Shop art prints <span>→</span></a>
+            <a className="button primary" href="#story">Enter the story</a>
+            <a className="button secondary" href="#shop">Explore ready printables</a>
           </div>
+          <p className="sync-note">Collection 01 · Artwork synced from the approved Drive library</p>
         </div>
 
-        <div className="hero-art" aria-label="Featured woodland artwork placeholder">
-          <div className="sun" />
-          <div className="hill hill-one" />
-          <div className="hill hill-two" />
-          <div className="tree tree-one" />
-          <div className="tree tree-two" />
-          <div className="character-mark">DA</div>
-          <div className="art-caption">
-            <span>Featured story</span>
-            <strong>Woodland Tales</strong>
-          </div>
-        </div>
+        <figure className="hero-art">
+          <img src={artwork.hero} alt="Rabbit, fox and owl exploring a warm woodland storybook scene" />
+          <figcaption>Woodland Storybook · Collection 01</figcaption>
+        </figure>
       </section>
 
-      <section className="story-section shell" id="collections">
-        <div className="section-intro">
-          <p className="eyebrow">Our little collections</p>
-          <h2>Every artwork belongs to a story.</h2>
-          <p>Explore visual worlds designed as cohesive collections, not isolated pieces.</p>
+      <section className="section shell" id="story">
+        <div className="section-heading">
+          <p className="eyebrow">Meet the little world</p>
+          <h2>One collection, three gentle characters.</h2>
+          <p className="lede">Each piece belongs to the same visual world, so the shop feels like a story rather than a shelf of unrelated files.</p>
         </div>
 
         <div className="story-grid">
-          {collections.map((collection, index) => (
-            <article className={`story-card ${collection.tone}`} key={collection.title}>
-              <div className="story-art">
-                <span className="story-number">0{index + 1}</span>
-                <div className="story-orbit" />
-                <div className="story-land" />
-              </div>
+          {storyPieces.map((piece) => (
+            <article className={`story-card ${piece.className}`} key={piece.title}>
+              <img src={piece.image} alt={`${piece.title} artwork from Woodland Storybook`} />
               <div className="story-copy">
-                <h3>{collection.title}</h3>
-                <p>{collection.note}</p>
-                <a href="#prints">View the collection <span>→</span></a>
+                <h3>{piece.title}</h3>
+                <p>{piece.note}</p>
               </div>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="shop-story shell" id="activities">
-        <div className="shop-story-copy">
-          <p className="eyebrow">Shop the story</p>
-          <h2>One world.<br />More ways to enjoy it.</h2>
-        </div>
-        <div className="journey">
-          <article><span>01</span><strong>Art Print</strong><p>Frame the story for a bedroom, nursery, or creative corner.</p></article>
-          <article><span>02</span><strong>Printable Play</strong><p>Turn the same characters into simple activities and quiet-time play.</p></article>
-          <article><span>03</span><strong>Story Bundle</strong><p>Collect matching artwork and printables in one cohesive little world.</p></article>
-        </div>
-      </section>
-
-      <section className="prints-section shell" id="prints">
-        <div className="section-row">
-          <div>
-            <p className="eyebrow">Featured art prints</p>
-            <h2>Made for the wall.<br />Built around the artwork.</h2>
+      <section className="shop-section" id="shop">
+        <div className="shell">
+          <div className="section-heading">
+            <p className="eyebrow">From the production library</p>
+            <h2>Ready printables from the same woodland world.</h2>
+            <p className="lede">Only products marked COMPLETE with final QA PASS in the production File Index are surfaced here.</p>
           </div>
-          <a className="text-link" href="#prints">View all prints <span>→</span></a>
-        </div>
 
-        <div className="prints-grid">
-          {prints.map((print) => (
-            <article className="print-card" key={print.title}>
-              <div className={`print-art ${print.tone}`}>
-                <div className="print-moon" />
-                <div className="print-ground" />
-                <span className="print-signature">Digital Arts</span>
-              </div>
-              <div className="print-info">
-                <div>
-                  <h3>{print.title}</h3>
-                  <p>{print.meta}</p>
+          <div className="product-grid">
+            {products.map((product) => (
+              <article className="product-card" key={product.id}>
+                <div className="product-image">
+                  <img src={productImages[product.image]} alt={`${product.title} woodland artwork preview`} />
                 </div>
-                <span className="print-arrow">↗</span>
-              </div>
-            </article>
-          ))}
+                <div className="product-body">
+                  <div className="product-status"><span>{product.id}</span><span>{product.status}</span></div>
+                  <h3>{product.title}</h3>
+                  <p className="product-meta">{product.meta}</p>
+                  <p>{product.detail}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <p className="catalog-note">Catalog source: Etsy Digital Product — File Index · Last synced {catalogLastSynced}</p>
         </div>
       </section>
 
-      <section className="freebie shell" id="freebie">
-        <div className="freebie-art">
-          <div className="freebie-page">01</div>
-          <div className="freebie-page page-two">02</div>
+      <section className="story-strip shell" id="about">
+        <img src={artwork.hero} alt="Woodland Storybook collection overview" />
+        <div>
+          <p className="eyebrow">Artwork-first by design</p>
+          <h2>One visual world, many printable stories.</h2>
+          <p>Original full-resolution artwork stays in Google Drive as the source of truth. The website uses lightweight mirrored previews for fast delivery while the Sheet keeps product status and traceability.</p>
         </div>
-        <div className="freebie-copy">
-          <p className="eyebrow">A little gift from the story</p>
-          <h2>Start with a free story page.</h2>
-          <p>Meet the visual world before you buy. This area will later connect to the email funnel and downloadable sample.</p>
-          <a className="button primary" href="mailto:hello@example.com">Get the free page</a>
+      </section>
+
+      <section className="freebie shell">
+        <div>
+          <p className="eyebrow">More stories are growing</p>
+          <h2>Start with what is production-ready.</h2>
+          <p>New artwork and products can enter the website only after they are stored in Drive and pass the catalog gate in the File Index.</p>
         </div>
+        <a className="button primary" href="#shop">Explore ready printables</a>
       </section>
 
       <footer className="footer shell">
-        <div>
-          <strong>Digital Arts</strong>
-          <p>Small illustrated worlds for print, play, and imagination.</p>
-        </div>
-        <div className="footer-links">
-          <a href="#collections">Collections</a>
-          <a href="#prints">Art Prints</a>
-          <a href="#activities">Printables</a>
-        </div>
+        <strong>Digital Arts</strong>
+        <p>Original artwork lives in Drive. Approved catalog status is mirrored from the production File Index into this website.</p>
       </footer>
     </main>
   );
