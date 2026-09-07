@@ -1,0 +1,16 @@
+name = "digital-arts-sync"
+main = "src/index.mjs"
+compatibility_date = "2026-09-07"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "ARTWORK_BUCKET"
+bucket_name = "digital-arts-artwork"
+
+[vars]
+SPREADSHEET_ID = "1C6qhwnDCVU_4Thp8wDA86qXHTNhkzgOEpLHl-3jg_j8"
+
+# Configure these as Worker secrets, never commit the real values:
+# wrangler secret put SYNC_TOKEN
+# wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
+# wrangler secret put GOOGLE_PRIVATE_KEY
